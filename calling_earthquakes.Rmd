@@ -1,0 +1,508 @@
+---
+title: "Blue whale calling & earthquakes"
+author: "Dawn Barlow"
+date: "1/6/2022"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(grid)
+library(gridExtra)
+
+## Read in dataframes 
+# earthquake specs
+EQspecs.df <- read.csv("./data/EarthquakeSpecs.csv")
+
+# calls before vs. after
+Dcalls_1hrBvsA_earthquakes.df <- read.csv("./data/Dcalls_1hrBvsA_earthquakes.csv")
+Dcalls_2hrBvsA_earthquakes.df <- read.csv("./data/Dcalls_2hrBvsA_earthquakes.csv")
+Dcalls_3hrBvsA_earthquakes.df <- read.csv("./data/Dcalls_3hrBvsA_earthquakes.csv")
+Dcalls_4hrBvsA_earthquakes.df <- read.csv("./data/Dcalls_4hrBvsA_earthquakes.csv")
+Dcalls_2hrBvsA_null.df <- read.csv("./data/Dcalls_2hrBvsA_null.csv")
+
+SI_1hrBvsA_earthquakes.df <- read.csv("./data/SI_1hrBvsA_earthquakes.csv")
+SI_2hrBvsA_earthquakes.df <- read.csv("./data/SI_2hrBvsA_earthquakes.csv")
+SI_3hrBvsA_earthquakes.df <- read.csv("./data/SI_3hrBvsA_earthquakes.csv")
+SI_4hrBvsA_earthquakes.df <- read.csv("./data/SI_4hrBvsA_earthquakes.csv")
+SI_2hrBvsA_null.df <- read.csv("./data/SI_2hrBvsA_null.csv")
+
+# calls 15 min timeseries
+calls_earthquakes_15min_2hr.df <- read.csv("./data/calls_earthquakes_15minres_2hrBvsA.csv")
+calls_earthquakes_15min_2hr.df$TimeBin <- factor(calls_earthquakes_15min_2hr.df$TimeBin, levels=c("t120b", "t105b", "t90b", "t75b", "t60b", "t45b", "t30b", "t15b", "t00a", "t15a", "t30a", "t45a", "t60a", "t75a", "t90a", "t105a"), ordered = TRUE)
+
+```
+
+# T tests comparing call metrics before vs. after
+```{r}
+# Run t-tests for each call metric
+ncalls.ttest <- t.test(Dcalls_2hrBvsA_earthquakes.df$ncalls_B, Dcalls_2hrBvsA_earthquakes.df$ncalls_A, paired = TRUE)
+energy.ttest <- t.test(Dcalls_2hrBvsA_earthquakes.df$energy_B, Dcalls_2hrBvsA_earthquakes.df$energy_A, paired = TRUE)
+SI.ttest <- t.test(SI_2hrBvsA_earthquakes.df$SI_B, SI_2hrBvsA_earthquakes.df$SI_A, paired = TRUE)
+
+# Compile t-test results
+ttest_outputs.df <- data.frame(matrix(nrow=3, ncol=4))
+colnames(ttest_outputs.df) <- c("metric", "estimate", "t.statistic", "p.value")
+
+ttest_outputs.df$metric <- c("ncalls", "relative.rl", "SI")
+ttest_outputs.df$estimate <- c(ncalls.ttest$estimate, energy.ttest$estimate, SI.ttest$estimate)
+ttest_outputs.df$t.statistic <- c(ncalls.ttest$statistic, energy.ttest$statistic, SI.ttest$statistic)
+ttest_outputs.df$p.value <- c(ncalls.ttest$p.value, energy.ttest$p.value, SI.ttest$p.value)
+
+ttest_outputs.df
+
+```
+
+# Linear models
+```{r}
+## Calls surrounding earthquake events
+# n calls 
+ncalls.lm <- lm(delta_ncalls ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+                    factor(Channel), data = Dcalls_2hrBvsA_earthquakes.df)
+summary(ncalls.lm)
+
+# energy 
+energy.lm <- lm(delta_energy ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+                    factor(Channel), data = Dcalls_2hrBvsA_earthquakes.df)
+summary(energy.lm)
+
+# song intensity  
+SI.lm <- lm(delta_SI ~ depth + magnitude + DistOrigin + Energy + SI_B + DOY +
+                    factor(Channel), data = SI_2hrBvsA_earthquakes.df)
+summary(SI.lm)
+
+## Calls surrounding earthquake events, without earthquake predictors
+# n calls
+ncalls_noquake.lm <- lm(delta_ncalls ~ ncalls_B + DOY +
+                    factor(Channel), data = Dcalls_2hrBvsA_earthquakes.df)
+summary(ncalls_noquake.lm)
+
+# SI
+SI_noquake.lm <- lm(delta_SI ~ SI_B + DOY +
+                    factor(Channel), data = SI_2hrBvsA_earthquakes.df)
+
+
+summary(SI_noquake.lm)
+
+## Calls surrounding null events
+# n calls
+ncalls_null.lm <- lm(delta_ncalls ~ ncalls_B + DOY +
+                    factor(Channel), data = Dcalls_2hrBvsA_null.df)
+summary(ncalls_null.lm)
+
+# SI
+SI_null.lm <- lm(delta_SI ~ SI_B + DOY +
+                    factor(Channel), data = SI_2hrBvsA_null.df)
+summary(SI_null.lm)
+
+```
+
+
+# Violin plots
+```{r}
+
+## Reconfigure dataframes for easier plotting
+# ncalls
+ncalls_BvsA_pivot.df <- Dcalls_2hrBvsA_earthquakes.df %>% 
+  pivot_longer(3:4,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+ncalls_BvsA_pivot.df$BvsA <- factor(ncalls_BvsA_pivot.df$BvsA, levels=c("ncalls_B", "ncalls_A"))
+# relative rl
+energy_BvsA_pivot.df <- Dcalls_2hrBvsA_earthquakes.df %>% 
+  pivot_longer(6:7,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+energy_BvsA_pivot.df$BvsA <- factor(energy_BvsA_pivot.df$BvsA, levels=c("energy_B", "energy_A"))
+# song intensity
+SI_BvsA_pivot.df <- SI_2hrBvsA_earthquakes.df %>% 
+  pivot_longer(3:4,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+SI_BvsA_pivot.df$BvsA <- factor(SI_BvsA_pivot.df$BvsA, levels=c("SI_B", "SI_A"))
+
+## Violin plots comparing calling before vs. after by earthquake event/hydrophone
+# ncalls
+ncalls.vp <- ggplot(data = ncalls_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("", "")) + ylab("Number of D calls") +
+  theme_classic() + theme(axis.title.x = element_blank())
+# relative rl
+energy.vp <- ggplot(data = energy_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("", "")) + ylab("D call relative received level") +
+  theme_classic() + theme(axis.title.x = element_blank())
+# song intensity
+SI.vp <- ggplot(data = SI_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("Before", "After")) + ylab("Song intensity index") +
+  theme_classic() + theme(axis.title.x = element_blank())
+
+## merge plots into multipanel
+BvsA.vp <- grid.arrange(ncalls.vp, energy.vp, SI.vp, ncol = 1)
+
+ggsave(plot = BvsA.vp, filename = "Fig2a.png", device = "png", height=150, width=70, units="mm")
+
+```
+
+# Timeseries
+```{r}
+# n calls
+Dcallrate.tsplot <- ggplot(data = calls_earthquakes_15min_2hr.df, aes(x = TimeBin, y = Dcall_rate.mean, group = group)) +
+  geom_point(size = 2, color = "dark blue") + geom_line(color = "dark blue") +
+  geom_errorbar(aes(ymin=Dcall_rate.mean-Dcall_rate.se, ymax=Dcall_rate.mean+Dcall_rate.se), width = 0.5, color = "dark blue") +
+  geom_vline(xintercept = "t00a", color = "dark blue", linetype = "dashed", size = 0.75) +
+  scale_x_discrete(labels = c("t-120", "t-105", "t-90", "t-75", "t-60", "t-45", "t-30", "t-15", "t+00","t+15", "t+30", "t+45", "t+60", "t+75", "t+90", "t+105")) +
+  theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  ylab("Number of D calls") + xlab("")
+
+# relative rl
+Dcallrl.tsplot <- ggplot(data = calls_earthquakes_15min_2hr.df, aes(x = TimeBin, y = Dcall_rl.mean, group = group)) +
+  geom_point(size = 2, color = "dark blue") + geom_line(color = "dark blue") +
+  geom_errorbar(aes(ymin=Dcall_rl.mean-Dcall_rl.se, ymax=Dcall_rl.mean+Dcall_rl.se), width = 0.5, color = "dark blue") +
+  geom_vline(xintercept = "t00a", color = "dark blue", linetype = "dashed", size = 0.75) +
+  scale_x_discrete(labels = c("t-120", "t-105", "t-90", "t-75", "t-60", "t-45", "t-30", "t-15", "t+00","t+15", "t+30", "t+45", "t+60", "t+75", "t+90", "t+105")) +
+  theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  ylab("D call relative received level") + xlab("")
+
+# song intensity
+SI.tsplot <- ggplot(data = calls_earthquakes_15min_2hr.df, aes(x = TimeBin, y = SI.mean, group = group)) +
+  geom_point(size = 2, color = "dark blue") + geom_line(color = "dark blue") +
+  geom_errorbar(aes(ymin=SI.mean-SI.se, ymax=SI.mean+SI.se), width = 0.5, color = "dark blue") +
+  geom_vline(xintercept = "t00a", color = "dark blue", linetype = "dashed", size = 0.75) +
+  scale_x_discrete(labels = c("t-120", "t-105", "t-90", "t-75", "t-60", "t-45", "t-30", "t-15", "t+00","t+15", "t+30", "t+45", "t+60", "t+75", "t+90", "t+105")) +
+  theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  ylab("Song intensity index") + xlab("Time relative to earthquake (min)")
+
+# merge plots into multipanel
+tsplots <- grid.arrange(Dcallrate.tsplot, Dcallrl.tsplot, SI.tsplot, ncol = 1)
+
+ggsave(plot = tsplots, filename = "Fig2b.png", device = "png", height=150, width=80, units="mm")
+
+```
+
+
+# Change in calling vs. prior calling activity
+```{r}
+# n calls, earthquake
+ncalls_quake.p <- ggplot(data = Dcalls_2hrBvsA_earthquakes.df, aes(y=delta_ncalls, x=ncalls_B)) +
+  geom_point(color = "dark blue", alpha = 0.25) + geom_smooth(method = lm, color = "dark blue", fill = "dark blue") +
+  ylim(-200,150) + xlim(0,270) +
+  ylab(expression(Delta*"number of D calls")) + xlab("Number of D calls before") +
+  theme_classic() + ggtitle("Earthquake") + theme(plot.title = element_text(color = "dark blue"))
+# n calls, null
+ncalls_null.p <- ggplot(data = Dcalls_2hrBvsA_null.df, aes(y=delta_ncalls, x=ncalls_B)) +
+  geom_point(color = "dark blue", alpha = 0.25) + geom_smooth(method = lm, color = "dark blue", fill = "dark blue") +
+  ylim(-200,150) + xlim(0,270) +
+  ylab(expression(Delta*"number of D calls")) + xlab("Number of D calls before") +
+  theme_classic() + ggtitle("Null") + theme(plot.title = element_text(color = "dark blue"))
+
+# song intensity, earthquake
+SI_quake.p <- ggplot(data = SI_2hrBvsA_earthquakes.df, aes(y=delta_SI, x=SI_B)) +
+  geom_point(color = "dark blue", alpha = 0.25) + geom_smooth(method = lm, color = "dark blue", fill = "dark blue") +
+  ylim(-0.15,0.25) + xlim(0.90,1.28) +
+  ylab(expression(Delta*"song intensity")) + xlab("Song intensity before") +
+  theme_classic() + ggtitle("") + theme(plot.title = element_text(color = "dark blue"))
+# song intensity, null
+SI_null.p <- ggplot(data = SI_2hrBvsA_null.df, aes(y=delta_SI, x=SI_B)) +
+  geom_point(color = "dark blue", alpha = 0.25) + geom_smooth(method = lm, color = "dark blue", fill = "dark blue") +
+  ylim(-0.15,0.25) + xlim(0.90,1.28) +
+  ylab(expression(Delta*"song intensity")) + xlab("Song intensity before") +
+  theme_classic() + ggtitle("") + theme(plot.title = element_text(color = "dark blue"))
+
+calling_QuakevsNull.multiplot <- grid.arrange(ncalls_quake.p, ncalls_null.p, SI_quake.p, SI_null.p, ncol = 2)
+
+ggsave(plot = calling_QuakevsNull.multiplot, filename = "Fig2c.png", device = "png", height=100, width=150, units="mm")
+
+```
+
+
+##########################################################################################################################################
+# SUPPLEMENTARY MATERIALS
+##########################################################################################################################################
+# Earthquake descriptions
+```{r}
+
+EQmag.hist <- ggplot(data = EQspecs.df, aes(x=magnitude)) + 
+  geom_histogram(color="dark blue", fill="dark blue", alpha=0.5) +
+  scale_x_continuous(expand = c(0,0)) + scale_y_continuous(expand = c(0,0)) +
+  ylab("Count") + xlab("Magnitude") +
+  theme_bw()
+EQmag.hist
+
+EQdist.hist <- ggplot(data = EQspecs.df, aes(x=DistOrigin/1000)) + 
+  geom_histogram(color="dark blue", fill="dark blue", alpha=0.5) +
+  scale_x_continuous(expand = c(0,0)) + scale_y_continuous(expand = c(0,0)) +
+  ylab("Count") + xlab("Distance to epicenter (km)") +
+  theme_bw()
+
+EQrl.hist <- ggplot(data = EQspecs.df, aes(x=Energy)) +
+  geom_histogram(color="dark blue", fill="dark blue", alpha=0.5) +
+  scale_x_continuous(expand = c(0,0)) + scale_y_continuous(expand = c(0,0)) +
+  ylab("Count") + xlab("Relative received level (dB)") +
+  theme_bw()
+
+EQdepth.hist <- ggplot(data = EQspecs.df, aes(x=depth)) +
+  geom_histogram(color="dark blue", fill="dark blue", alpha=0.5) +
+  scale_x_continuous(expand = c(0,0)) + scale_y_continuous(expand = c(0,0)) +
+  ylab("Count") + xlab("Epicenter depth (km)") +
+  theme_bw()
+
+EQspecs.multiplot <- grid.arrange(EQrl.hist, EQdist.hist, EQmag.hist, EQdepth.hist)
+ggsave(plot = EQspecs.multiplot, filename = "FigS1.png", device = "png", height=100, width=150, units="mm")
+
+
+```
+
+
+# Violin plots for all temporal windows
+```{r}
+
+######### 1 hour ######### 
+## Reconfigure dataframes for easier plotting
+# ncalls
+ncalls_BvsA_pivot_1hr.df <- Dcalls_1hrBvsA_earthquakes.df %>% 
+  pivot_longer(3:4,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+ncalls_BvsA_pivot_1hr.df$BvsA <- factor(ncalls_BvsA_pivot_1hr.df$BvsA, levels=c("ncalls_B", "ncalls_A"))
+# relative rl
+energy_BvsA_pivot_1hr.df <- Dcalls_1hrBvsA_earthquakes.df %>% 
+  pivot_longer(6:7,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+energy_BvsA_pivot_1hr.df$BvsA <- factor(energy_BvsA_pivot_1hr.df$BvsA, levels=c("energy_B", "energy_A"))
+# song intensity
+SI_BvsA_pivot.df_1hr <- SI_1hrBvsA_earthquakes.df %>% 
+  pivot_longer(3:4,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+SI_BvsA_pivot.df_1hr$BvsA <- factor(SI_BvsA_pivot.df_1hr$BvsA, levels=c("SI_B", "SI_A"))
+
+## Violin plots comparing calling before vs. after by earthquake event/hydrophone
+# ncalls
+ncalls_1hr.vp <- ggplot(data = ncalls_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("", "")) + ylab("Number of D calls") +
+  theme_classic() + theme(axis.title.x = element_blank(),plot.title = element_text(hjust = 0.5)) + 
+  ggtitle("One hour")
+
+# relative rl
+energy_1hr.vp <- ggplot(data = energy_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("", "")) + ylab("D call relative received level") +
+  theme_classic() + theme(axis.title.x = element_blank()) + ggtitle(" ")
+# song intensity
+SI_1hr.vp <- ggplot(data = SI_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("Before", "After")) + ylab("Song intensity index") +
+  theme_classic() + theme(axis.title.x = element_blank()) + ggtitle(" ")
+
+## merge plots into multipanel
+BvsA_1hr.vp <- grid.arrange(ncalls_1hr.vp, energy_1hr.vp, SI_1hr.vp, ncol = 1)
+
+######### 2 hour ######### 
+## Reconfigure dataframes for easier plotting
+# ncalls
+ncalls_BvsA_pivot_2hr.df <- Dcalls_2hrBvsA_earthquakes.df %>% 
+  pivot_longer(3:4,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+ncalls_BvsA_pivot_2hr.df$BvsA <- factor(ncalls_BvsA_pivot_2hr.df$BvsA, levels=c("ncalls_B", "ncalls_A"))
+# relative rl
+energy_BvsA_pivot_2hr.df <- Dcalls_2hrBvsA_earthquakes.df %>% 
+  pivot_longer(6:7,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+energy_BvsA_pivot_2hr.df$BvsA <- factor(energy_BvsA_pivot_2hr.df$BvsA, levels=c("energy_B", "energy_A"))
+# song intensity
+SI_BvsA_pivot.df_2hr <- SI_2hrBvsA_earthquakes.df %>% 
+  pivot_longer(3:4,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+SI_BvsA_pivot.df_2hr$BvsA <- factor(SI_BvsA_pivot.df_2hr$BvsA, levels=c("SI_B", "SI_A"))
+
+## Violin plots comparing calling before vs. after by earthquake event/hydrophone
+# ncalls
+ncalls_2hr.vp <- ggplot(data = ncalls_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("", "")) + ylab(" ") +
+  theme_classic() + theme(axis.title.x = element_blank(),plot.title = element_text(hjust = 0.5)) + 
+  ggtitle("Two hours")
+# relative rl
+energy_2hr.vp <- ggplot(data = energy_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("", "")) + ylab(" ") +
+  theme_classic() + theme(axis.title.x = element_blank()) + ggtitle(" ")
+# song intensity
+SI_2hr.vp <- ggplot(data = SI_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("Before", "After")) + ylab(" ") +
+  theme_classic() + theme(axis.title.x = element_blank()) + ggtitle(" ")
+
+## merge plots into multipanel
+BvsA_2hr.vp <- grid.arrange(ncalls_2hr.vp, energy_2hr.vp, SI_2hr.vp, ncol = 1)
+
+######### 3 hour ######### 
+## Reconfigure dataframes for easier plotting
+# ncalls
+ncalls_BvsA_pivot_3hr.df <- Dcalls_3hrBvsA_earthquakes.df %>% 
+  pivot_longer(3:4,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+ncalls_BvsA_pivot_3hr.df$BvsA <- factor(ncalls_BvsA_pivot_3hr.df$BvsA, levels=c("ncalls_B", "ncalls_A"))
+# relative rl
+energy_BvsA_pivot_3hr.df <- Dcalls_3hrBvsA_earthquakes.df %>% 
+  pivot_longer(6:7,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+energy_BvsA_pivot_3hr.df$BvsA <- factor(energy_BvsA_pivot_3hr.df$BvsA, levels=c("energy_B", "energy_A"))
+# song intensity
+SI_BvsA_pivot.df_3hr <- SI_3hrBvsA_earthquakes.df %>% 
+  pivot_longer(3:4,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+SI_BvsA_pivot.df_3hr$BvsA <- factor(SI_BvsA_pivot.df_3hr$BvsA, levels=c("SI_B", "SI_A"))
+
+## Violin plots comparing calling before vs. after by earthquake event/hydrophone
+# ncalls
+ncalls_3hr.vp <- ggplot(data = ncalls_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("", "")) + ylab(" ") +
+  theme_classic() + theme(axis.title.x = element_blank(),plot.title = element_text(hjust = 0.5)) + 
+  ggtitle("Three hours")
+# relative rl
+energy_3hr.vp <- ggplot(data = energy_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("", "")) + ylab(" ") +
+  theme_classic() + theme(axis.title.x = element_blank()) + ggtitle(" ")
+# song intensity
+SI_3hr.vp <- ggplot(data = SI_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("Before", "After")) + ylab(" ") +
+  theme_classic() + theme(axis.title.x = element_blank()) + ggtitle(" ")
+
+## merge plots into multipanel
+BvsA_3hr.vp <- grid.arrange(ncalls_3hr.vp, energy_3hr.vp, SI_3hr.vp, ncol = 1)
+
+######### 4 hour ######### 
+## Reconfigure dataframes for easier plotting
+# ncalls
+ncalls_BvsA_pivot_4hr.df <- Dcalls_4hrBvsA_earthquakes.df %>% 
+  pivot_longer(3:4,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+ncalls_BvsA_pivot_4hr.df$BvsA <- factor(ncalls_BvsA_pivot_4hr.df$BvsA, levels=c("ncalls_B", "ncalls_A"))
+# relative rl
+energy_BvsA_pivot_4hr.df <- Dcalls_4hrBvsA_earthquakes.df %>% 
+  pivot_longer(6:7,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+energy_BvsA_pivot_4hr.df$BvsA <- factor(energy_BvsA_pivot_4hr.df$BvsA, levels=c("energy_B", "energy_A"))
+# song intensity
+SI_BvsA_pivot.df_4hr <- SI_4hrBvsA_earthquakes.df %>% 
+  pivot_longer(3:4,names_to = "BvsA") %>% #
+  mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
+SI_BvsA_pivot.df_4hr$BvsA <- factor(SI_BvsA_pivot.df_4hr$BvsA, levels=c("SI_B", "SI_A"))
+
+## Violin plots comparing calling before vs. after by earthquake event/hydrophone
+# ncalls
+ncalls_4hr.vp <- ggplot(data = ncalls_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("", "")) + ylab(" ") +
+  theme_classic() + theme(axis.title.x = element_blank(),plot.title = element_text(hjust = 0.5)) + 
+  ggtitle("Four hours")
+# relative rl
+energy_4hr.vp <- ggplot(data = energy_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("", "")) + ylab(" ") +
+  theme_classic() + theme(axis.title.x = element_blank()) + ggtitle(" ")
+# song intensity
+SI_4hr.vp <- ggplot(data = SI_BvsA_pivot.df, aes(BvsA, value)) +
+  geom_violin(color = "dark blue", fill = "dark blue", alpha=0.25) +
+  stat_summary(fun = "mean", geom = "point", color = "dark blue") +
+  scale_x_discrete(labels = c("Before", "After")) + ylab(" ") +
+  theme_classic() + theme(axis.title.x = element_blank()) + ggtitle(" ")
+
+## merge plots into multipanel
+BvsA_4hr.vp <- grid.arrange(ncalls_4hr.vp, energy_4hr.vp, SI_4hr.vp, ncol = 1)
+
+
+## Combine plots
+BvsA_allwindows.vp <- grid.arrange(BvsA_1hr.vp, BvsA_2hr.vp, BvsA_3hr.vp, BvsA_4hr.vp, nrow = 1)
+ggsave(plot = BvsA_allwindows.vp, filename = "FigS2.png", device = "png", height=150, width=150, units="mm")
+
+```
+
+
+# Linear models for all temporal windows
+```{r}
+
+## 1 hour
+# n calls 
+ncalls_1hr.lm <- lm(delta_ncalls ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+                    factor(Channel), data = Dcalls_1hrBvsA_earthquakes.df)
+summary(ncalls_1hr.lm)
+
+# energy 
+energy_1hr.lm <- lm(delta_energy ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+                    factor(Channel), data = Dcalls_1hrBvsA_earthquakes.df)
+summary(energy_1hr.lm)
+
+# song intensity  
+SI_1hr.lm <- lm(delta_SI ~ depth + magnitude + DistOrigin + Energy + SI_B + DOY +
+                    factor(Channel), data = SI_1hrBvsA_earthquakes.df)
+summary(SI_1hr.lm)
+
+## 2 hour
+# n calls 
+ncalls_2hr.lm <- lm(delta_ncalls ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+                    factor(Channel), data = Dcalls_2hrBvsA_earthquakes.df)
+summary(ncalls_2hr.lm)
+
+# energy 
+energy_2hr.lm <- lm(delta_energy ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+                    factor(Channel), data = Dcalls_2hrBvsA_earthquakes.df)
+summary(energy_2hr.lm)
+
+# song intensity  
+SI_2hr.lm <- lm(delta_SI ~ depth + magnitude + DistOrigin + Energy + SI_B + DOY +
+                    factor(Channel), data = SI_2hrBvsA_earthquakes.df)
+summary(SI_2hr.lm)
+
+## 3 hour
+# n calls 
+ncalls_3hr.lm <- lm(delta_ncalls ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+                    factor(Channel), data = Dcalls_3hrBvsA_earthquakes.df)
+summary(ncalls_3hr.lm)
+
+# energy 
+energy_3hr.lm <- lm(delta_energy ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+                    factor(Channel), data = Dcalls_3hrBvsA_earthquakes.df)
+summary(energy_3hr.lm)
+
+# song intensity  
+SI_3hr.lm <- lm(delta_SI ~ depth + magnitude + DistOrigin + Energy + SI_B + DOY +
+                    factor(Channel), data = SI_3hrBvsA_earthquakes.df)
+summary(SI_3hr.lm)
+
+## 4 hour
+# n calls 
+ncalls_4hr.lm <- lm(delta_ncalls ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+                    factor(Channel), data = Dcalls_4hrBvsA_earthquakes.df)
+summary(ncalls_4hr.lm)
+
+# energy 
+energy_4hr.lm <- lm(delta_energy ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+                    factor(Channel), data = Dcalls_4hrBvsA_earthquakes.df)
+summary(energy_4hr.lm)
+
+# song intensity  
+SI_4hr.lm <- lm(delta_SI ~ depth + magnitude + DistOrigin + Energy + SI_B + DOY +
+                    factor(Channel), data = SI_4hrBvsA_earthquakes.df)
+summary(SI_4hr.lm)
+
+```
+
