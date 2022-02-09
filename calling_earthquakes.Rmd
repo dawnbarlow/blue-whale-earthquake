@@ -1,7 +1,7 @@
 ---
 title: "Blue whale calling & earthquakes"
 author: "Dawn Barlow"
-date: "1/6/2022"
+date: "2/8/2022"
 output: html_document
 ---
 
@@ -39,7 +39,7 @@ calls_earthquakes_15min_2hr.df$TimeBin <- factor(calls_earthquakes_15min_2hr.df$
 ```{r}
 # Run t-tests for each call metric
 ncalls.ttest <- t.test(Dcalls_2hrBvsA_earthquakes.df$ncalls_B, Dcalls_2hrBvsA_earthquakes.df$ncalls_A, paired = TRUE)
-energy.ttest <- t.test(Dcalls_2hrBvsA_earthquakes.df$energy_B, Dcalls_2hrBvsA_earthquakes.df$energy_A, paired = TRUE)
+energy.ttest <- t.test(Dcalls_2hrBvsA_earthquakes.df$energy_B_dBFS, Dcalls_2hrBvsA_earthquakes.df$energy_A_dBFS, paired = TRUE)
 SI.ttest <- t.test(SI_2hrBvsA_earthquakes.df$SI_B, SI_2hrBvsA_earthquakes.df$SI_A, paired = TRUE)
 
 # Compile t-test results
@@ -55,6 +55,7 @@ ttest_outputs.df
 
 ```
 
+
 # Linear models
 ```{r}
 ## Calls surrounding earthquake events
@@ -64,7 +65,7 @@ ncalls.lm <- lm(delta_ncalls ~ depth + magnitude + DistOrigin + Energy + ncalls_
 summary(ncalls.lm)
 
 # energy 
-energy.lm <- lm(delta_energy ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+energy.lm <- lm(delta_energy_dBFS ~ depth + magnitude + DistOrigin + Energy_dBFS + ncalls_B + DOY +
                     factor(Channel), data = Dcalls_2hrBvsA_earthquakes.df)
 summary(energy.lm)
 
@@ -111,9 +112,9 @@ ncalls_BvsA_pivot.df <- Dcalls_2hrBvsA_earthquakes.df %>%
 ncalls_BvsA_pivot.df$BvsA <- factor(ncalls_BvsA_pivot.df$BvsA, levels=c("ncalls_B", "ncalls_A"))
 # relative rl
 energy_BvsA_pivot.df <- Dcalls_2hrBvsA_earthquakes.df %>% 
-  pivot_longer(6:7,names_to = "BvsA") %>% #
+  pivot_longer(18:19,names_to = "BvsA") %>% #
   mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
-energy_BvsA_pivot.df$BvsA <- factor(energy_BvsA_pivot.df$BvsA, levels=c("energy_B", "energy_A"))
+energy_BvsA_pivot.df$BvsA <- factor(energy_BvsA_pivot.df$BvsA, levels=c("energy_B_dBFS", "energy_A_dBFS"))
 # song intensity
 SI_BvsA_pivot.df <- SI_2hrBvsA_earthquakes.df %>% 
   pivot_longer(3:4,names_to = "BvsA") %>% #
@@ -159,9 +160,9 @@ Dcallrate.tsplot <- ggplot(data = calls_earthquakes_15min_2hr.df, aes(x = TimeBi
   ylab("Number of D calls") + xlab("")
 
 # relative rl
-Dcallrl.tsplot <- ggplot(data = calls_earthquakes_15min_2hr.df, aes(x = TimeBin, y = Dcall_rl.mean, group = group)) +
+Dcallrl.tsplot <- ggplot(data = calls_earthquakes_15min_2hr.df, aes(x = TimeBin, y = Dcall_rl_dBFS.mean, group = group)) +
   geom_point(size = 2, color = "dark blue") + geom_line(color = "dark blue") +
-  geom_errorbar(aes(ymin=Dcall_rl.mean-Dcall_rl.se, ymax=Dcall_rl.mean+Dcall_rl.se), width = 0.5, color = "dark blue") +
+  geom_errorbar(aes(ymin=Dcall_rl_dBFS.mean-Dcall_rl_dBFS.se, ymax=Dcall_rl_dBFS.mean+Dcall_rl_dBFS.se), width = 0.5, color = "dark blue") +
   geom_vline(xintercept = "t00a", color = "dark blue", linetype = "dashed", size = 0.75) +
   scale_x_discrete(labels = c("t-120", "t-105", "t-90", "t-75", "t-60", "t-45", "t-30", "t-15", "t+00","t+15", "t+30", "t+45", "t+60", "t+75", "t+90", "t+105")) +
   theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
@@ -238,10 +239,10 @@ EQdist.hist <- ggplot(data = EQspecs.df, aes(x=DistOrigin/1000)) +
   ylab("Count") + xlab("Distance to epicenter (km)") +
   theme_bw()
 
-EQrl.hist <- ggplot(data = EQspecs.df, aes(x=Energy)) +
+EQrl.hist <- ggplot(data = EQspecs.df, aes(x=Energy - max(EQspecs.df$Energy))) +
   geom_histogram(color="dark blue", fill="dark blue", alpha=0.5) +
   scale_x_continuous(expand = c(0,0)) + scale_y_continuous(expand = c(0,0)) +
-  ylab("Count") + xlab("Relative received level (dB)") +
+  ylab("Count") + xlab("Relative received level (dBFS)") +
   theme_bw()
 
 EQdepth.hist <- ggplot(data = EQspecs.df, aes(x=depth)) +
@@ -269,7 +270,7 @@ ncalls_BvsA_pivot_1hr.df <- Dcalls_1hrBvsA_earthquakes.df %>%
 ncalls_BvsA_pivot_1hr.df$BvsA <- factor(ncalls_BvsA_pivot_1hr.df$BvsA, levels=c("ncalls_B", "ncalls_A"))
 # relative rl
 energy_BvsA_pivot_1hr.df <- Dcalls_1hrBvsA_earthquakes.df %>% 
-  pivot_longer(6:7,names_to = "BvsA") %>% #
+  pivot_longer(18:19,names_to = "BvsA") %>% #
   mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
 energy_BvsA_pivot_1hr.df$BvsA <- factor(energy_BvsA_pivot_1hr.df$BvsA, levels=c("energy_B", "energy_A"))
 # song intensity
@@ -312,7 +313,7 @@ ncalls_BvsA_pivot_2hr.df <- Dcalls_2hrBvsA_earthquakes.df %>%
 ncalls_BvsA_pivot_2hr.df$BvsA <- factor(ncalls_BvsA_pivot_2hr.df$BvsA, levels=c("ncalls_B", "ncalls_A"))
 # relative rl
 energy_BvsA_pivot_2hr.df <- Dcalls_2hrBvsA_earthquakes.df %>% 
-  pivot_longer(6:7,names_to = "BvsA") %>% #
+  pivot_longer(18:19,names_to = "BvsA") %>% #
   mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
 energy_BvsA_pivot_2hr.df$BvsA <- factor(energy_BvsA_pivot_2hr.df$BvsA, levels=c("energy_B", "energy_A"))
 # song intensity
@@ -354,7 +355,7 @@ ncalls_BvsA_pivot_3hr.df <- Dcalls_3hrBvsA_earthquakes.df %>%
 ncalls_BvsA_pivot_3hr.df$BvsA <- factor(ncalls_BvsA_pivot_3hr.df$BvsA, levels=c("ncalls_B", "ncalls_A"))
 # relative rl
 energy_BvsA_pivot_3hr.df <- Dcalls_3hrBvsA_earthquakes.df %>% 
-  pivot_longer(6:7,names_to = "BvsA") %>% #
+  pivot_longer(18:19,names_to = "BvsA") %>% #
   mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
 energy_BvsA_pivot_3hr.df$BvsA <- factor(energy_BvsA_pivot_3hr.df$BvsA, levels=c("energy_B", "energy_A"))
 # song intensity
@@ -396,7 +397,7 @@ ncalls_BvsA_pivot_4hr.df <- Dcalls_4hrBvsA_earthquakes.df %>%
 ncalls_BvsA_pivot_4hr.df$BvsA <- factor(ncalls_BvsA_pivot_4hr.df$BvsA, levels=c("ncalls_B", "ncalls_A"))
 # relative rl
 energy_BvsA_pivot_4hr.df <- Dcalls_4hrBvsA_earthquakes.df %>% 
-  pivot_longer(6:7,names_to = "BvsA") %>% #
+  pivot_longer(18:19,names_to = "BvsA") %>% #
   mutate(publicid_channel = as.factor(publicid_channel)) # Make factors 
 energy_BvsA_pivot_4hr.df$BvsA <- factor(energy_BvsA_pivot_4hr.df$BvsA, levels=c("energy_B", "energy_A"))
 # song intensity
@@ -447,7 +448,7 @@ ncalls_1hr.lm <- lm(delta_ncalls ~ depth + magnitude + DistOrigin + Energy + nca
 summary(ncalls_1hr.lm)
 
 # energy 
-energy_1hr.lm <- lm(delta_energy ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+energy_1hr.lm <- lm(delta_energy_dBFS ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
                     factor(Channel), data = Dcalls_1hrBvsA_earthquakes.df)
 summary(energy_1hr.lm)
 
@@ -463,7 +464,7 @@ ncalls_2hr.lm <- lm(delta_ncalls ~ depth + magnitude + DistOrigin + Energy + nca
 summary(ncalls_2hr.lm)
 
 # energy 
-energy_2hr.lm <- lm(delta_energy ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+energy_2hr.lm <- lm(delta_energy_dBFS ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
                     factor(Channel), data = Dcalls_2hrBvsA_earthquakes.df)
 summary(energy_2hr.lm)
 
@@ -479,7 +480,7 @@ ncalls_3hr.lm <- lm(delta_ncalls ~ depth + magnitude + DistOrigin + Energy + nca
 summary(ncalls_3hr.lm)
 
 # energy 
-energy_3hr.lm <- lm(delta_energy ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+energy_3hr.lm <- lm(delta_energy_dBFS ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
                     factor(Channel), data = Dcalls_3hrBvsA_earthquakes.df)
 summary(energy_3hr.lm)
 
@@ -490,7 +491,7 @@ summary(SI_3hr.lm)
 
 ## 4 hour
 # n calls 
-ncalls_4hr.lm <- lm(delta_ncalls ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
+ncalls_4hr.lm <- lm(delta_energy_dBFS ~ depth + magnitude + DistOrigin + Energy + ncalls_B + DOY +
                     factor(Channel), data = Dcalls_4hrBvsA_earthquakes.df)
 summary(ncalls_4hr.lm)
 
